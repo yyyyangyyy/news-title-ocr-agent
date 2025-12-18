@@ -1,10 +1,10 @@
 # 核心网页框架
 streamlit>=1.30.0
 
-# OCR核心依赖（适配服务器环境）
+# OCR核心依赖（适配Python 3.13）
 pytesseract>=0.3.10
-opencv-python-headless==4.8.0.76  # 关键：无GUI的OpenCV版本，解决cv2导入失败
+opencv-python-headless==4.10.0.84  # 支持Python 3.13的版本
 
 # 图片处理依赖
 pillow>=10.0.1
-numpy>=1.24.3
+numpy>=1.26.0  # 升级numpy适配Python 3.13
