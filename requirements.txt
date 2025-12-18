@@ -1,0 +1,6 @@
+# requirements.txt
+streamlit>=1.30.0
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+pillow>=10.0.1
+numpy>=1.24.3
