@@ -1,7 +1,10 @@
-# requirements.txt
+# 核心网页框架
 streamlit>=1.30.0
-pytesseract>=0.3.10
-opencv-python-headless==4.8.0.76
-pillow>=10.0.1
 
+# OCR核心依赖（适配服务器环境）
+pytesseract>=0.3.10
+opencv-python-headless==4.8.0.76  # 关键：无GUI的OpenCV版本，解决cv2导入失败
+
+# 图片处理依赖
+pillow>=10.0.1
 numpy>=1.24.3
