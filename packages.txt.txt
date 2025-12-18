@@ -1,0 +1,2 @@
+tesseract-ocr
+tesseract-ocr-chi-sim  # 中文语言包（必须加，否则无法识别中文）
