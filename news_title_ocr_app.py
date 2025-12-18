@@ -7,6 +7,7 @@ import numpy as np
 import base64
 import io
 import os
+import json  # 关键：新增JSON解析库
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -15,47 +16,37 @@ st.set_page_config(
     layout="wide"
 )
 
-# ========== 嵌入前端代码：监听剪贴板粘贴图片 ==========
+# ========== 嵌入前端代码：监听剪贴板粘贴图片（修复参数类型错误） ==========
 def add_paste_image_js():
     js_code = """
     <script>
     // 监听剪贴板粘贴事件
     document.addEventListener('paste', function (e) {
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-        const pasteImages = [];
         // 遍历剪贴板中的内容，筛选图片
         for (let item of items) {
             if (item.kind === 'file' && item.type.indexOf('image/') !== -1) {
                 const file = item.getAsFile();
                 const reader = new FileReader();
                 reader.onload = function (event) {
-                    // 将图片转为Base64，传递给Streamlit的session_state
+                    // 将图片转为Base64，封装为JSON字符串（避免复杂类型）
                     const base64Str = event.target.result.split(',')[1];
                     const fileName = file.name || 'paste_' + new Date().getTime() + '.png';
-                    // 追加到图片列表（支持多张）
-                    if (!window.pasteImages) window.pasteImages = [];
-                    window.pasteImages.push({name: fileName, data: base64Str});
-                    // 更新Streamlit的session_state
-                    Streamlit.setComponentValue(window.pasteImages);
+                    const imgData = JSON.stringify({name: fileName, data: base64Str});
+                    // 传递单张图片数据（Streamlit支持的格式）
+                    window.parent.postMessage({
+                        isStreamlitMessage: true,
+                        type: 'streamlit:setComponentValue',
+                        value: imgData
+                    }, '*');
                 };
                 reader.readAsDataURL(file);
             }
         }
     });
-
-    // 初始化Streamlit组件通信
-    function initStreamlit() {
-        const STREAMLIT_EVENT = 'streamlit:componentValueUpdate';
-        window.Streamlit = {
-            setComponentValue: function (value) {
-                window.dispatchEvent(new CustomEvent(STREAMLIT_EVENT, {detail: value}));
-            }
-        };
-    }
-    initStreamlit();
     </script>
     """
-    # 嵌入JS代码到页面
+    # 嵌入JS代码到页面（高度0，不占用可视区域）
     st.components.v1.html(js_code, height=0)
 
 # ========== OCR核心逻辑 ==========
@@ -122,34 +113,46 @@ st.divider()
 # 初始化提取器
 extractor = NewsTitleExtractor()
 
-# 初始化session_state：存储粘贴的图片
+# 初始化session_state：存储粘贴的图片列表
 if 'paste_images' not in st.session_state:
     st.session_state.paste_images = []
 
-# 1. 嵌入粘贴图片的JS代码
+# 1. 嵌入粘贴图片的JS代码（修复后）
 add_paste_image_js()
 
-# 2. 监听粘贴的图片数据
-paste_component = st.components.v1.html(
+# 2. 粘贴图片区域（简化组件通信）
+st.components.v1.html(
     """
     <div id="paste-container" style="padding: 20px; border: 2px dashed #ccc; border-radius: 8px; text-align: center;">
         <p>📋 在此区域粘贴图片（支持多张），粘贴后自动加载</p>
         <p style="color: #666; font-size: 12px;">提示：可直接复制截图/图片后，按Ctrl+V（Mac按Cmd+V）粘贴</p>
     </div>
-    <script>
-    // 监听Streamlit组件事件，更新session_state
-    document.addEventListener('streamlit:componentValueUpdate', function(e) {
-        window.parent.document.querySelector('iframe[title="st.components.v1.html"]').contentWindow.Streamlit.setComponentValue(e.detail);
-    });
-    </script>
     """,
     height=150,
     key="paste_area"
 )
 
-# 更新session_state中的粘贴图片
-if paste_component:
-    st.session_state.paste_images = paste_component
+# 3. 监听并处理粘贴的图片数据（修复类型错误）
+paste_data = st.experimental_get_query_params().get('paste_data', [None])[0]
+# 兼容Streamlit组件通信的临时处理
+if not paste_data:
+    try:
+        # 捕获组件传递的图片数据
+        paste_data = st.session_state.get('_component_values', {}).get('paste_area')
+    except:
+        paste_data = None
+
+# 解析粘贴的图片数据并追加到列表
+if paste_data and paste_data != "null":
+    try:
+        img_info = json.loads(paste_data)
+        # 避免重复添加同一张图片
+        if img_info not in st.session_state.paste_images:
+            st.session_state.paste_images.append(img_info)
+            # 清空临时参数，避免重复解析
+            st.experimental_set_query_params(paste_data=None)
+    except json.JSONDecodeError:
+        pass
 
 # ========== 展示并处理粘贴的图片 ==========
 if st.session_state.paste_images:
@@ -205,4 +208,4 @@ if uploaded_files:
 
 # 页脚说明
 st.divider()
-st.caption("提示：1. 图片越清晰、标题文字越大，识别准确率越高；2. 粘贴多张图片时，可分次粘贴或一次性粘贴；3. 支持中文/英文标题识别")
+st.caption("提示：1. 图片越清晰、标题文字越大，识别准确率越高；2. 粘贴多张图片时，可分次粘贴；3. 支持中文/英文标题识别")
